@@ -5,6 +5,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+
+def _load_dotenv(path):
+    """Read KEY=VALUE lines from .env into os.environ without overriding what
+    is already set. Keeps API keys out of shell history and out of git."""
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+_load_dotenv(ROOT / ".env")
+
 # The client's operational database. We open it read-only and never write to it.
 DB_PATH = Path(os.environ.get("KESTREL_DB", ROOT / "data" / "kestrel_ops.db"))
 
@@ -29,13 +45,24 @@ PRICE_FRESHNESS_DAYS = int(os.environ.get("KESTREL_PRICE_FRESHNESS_DAYS", "14"))
 # Ask-anything. Two ways in:
 #   ANTHROPIC_API_KEY                         -> Anthropic SDK, model KESTREL_LLM_MODEL
 #   LLM_API_KEY + LLM_BASE_URL (+ LLM_MODEL)  -> any OpenAI-compatible chat endpoint
-# GEMINI_API_KEY is a shortcut for the second form pointed at Google's endpoint,
-# which has a free tier. Without any of these the tab offers prepared questions.
+# XAI_API_KEY, GEMINI_API_KEY and GROQ_API_KEY are shortcuts for the second
+# form pointed at that vendor's endpoint. Without any of these the tab offers
+# prepared questions only.
 ANTHROPIC_MODEL = os.environ.get("KESTREL_LLM_MODEL", "claude-sonnet-5")
-LLM_API_KEY = os.environ.get("LLM_API_KEY") or os.environ.get("GEMINI_API_KEY")
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL") or (
-    "https://generativelanguage.googleapis.com/v1beta/openai" if os.environ.get("GEMINI_API_KEY") else None)
-LLM_MODEL = os.environ.get("LLM_MODEL") or ("gemini-2.5-flash" if os.environ.get("GEMINI_API_KEY") else None)
+
+_SHORTCUTS = (
+    ("XAI_API_KEY", "https://api.x.ai/v1", "grok-3-mini"),
+    ("GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.5-flash"),
+    ("GROQ_API_KEY", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
+)
+LLM_API_KEY = os.environ.get("LLM_API_KEY")
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL")
+LLM_MODEL = os.environ.get("LLM_MODEL")
+if not LLM_API_KEY:
+    for var, url, model in _SHORTCUTS:
+        if os.environ.get(var):
+            LLM_API_KEY, LLM_BASE_URL, LLM_MODEL = os.environ[var], LLM_BASE_URL or url, LLM_MODEL or model
+            break
 
 # "In full" is normally exact. In this dataset every single order line is
 # short by a little (see docs/DATA_NOTES.md), so exact in-full is zero everywhere

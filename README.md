@@ -58,11 +58,16 @@ offers eight prepared questions.
 
 ```bash
 export ANTHROPIC_API_KEY=...                 # Claude (model via KESTREL_LLM_MODEL)
-export GEMINI_API_KEY=...                    # Gemini, free tier at aistudio.google.com/apikey
-# or any OpenAI-compatible endpoint, e.g. Groq (free tier) or a local Ollama:
-export LLM_API_KEY=... LLM_BASE_URL=https://api.groq.com/openai/v1 LLM_MODEL=llama-3.3-70b-versatile
+export XAI_API_KEY=...                       # Grok (default model grok-3-mini)
+export GEMINI_API_KEY=...                    # Gemini (default gemini-2.5-flash)
+export GROQ_API_KEY=...                      # Groq free tier (default llama-3.3-70b-versatile)
+# or any OpenAI-compatible endpoint, e.g. a local Ollama:
 export LLM_API_KEY=ollama LLM_BASE_URL=http://localhost:11434/v1 LLM_MODEL=llama3.1
 ```
+
+`LLM_MODEL` overrides the default model for any of the shortcuts. A `.env`
+file in the repo root is read at start-up (it is gitignored), so the key does
+not have to live in your shell.
 
 The model only ever writes a single SELECT; it is checked for anything
 else before it runs, and the SQL is shown with every answer.
@@ -81,7 +86,7 @@ All optional, all environment variables.
 | `KESTREL_PARTNER_API` | `http://localhost:8088` | Partner API base URL |
 | `KESTREL_PARTNER_API_KEY` | the key from the pack | Sent as `X-API-Key` |
 | `KESTREL_BAZAAR_URL` | `http://localhost:8080` | Competitor site base URL |
-| `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `LLM_API_KEY`+`LLM_BASE_URL`+`LLM_MODEL` | none | Enables free-form questions in the Ask tab |
+| `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, or `LLM_API_KEY`+`LLM_BASE_URL`+`LLM_MODEL` | none | Enables free-form questions in the Ask tab |
 
 ## Tests
 
