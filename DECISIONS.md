@@ -28,3 +28,19 @@ A running log, kept as the work went. Newest at the bottom.
 - Overview leads with six numbers and the worst outlets, routes, warehouses. No clicks.
 - Region selector is the regional manager's view. Same code, one filter. No logins.
 - Ask-anything: an LLM writes one read-only SELECT over the clean layer. SQL and rows shown with every answer. Without a key the tab offers the eight sample questions so it still opens.
+
+## Not built, on purpose
+Route-level freight. Price history. Weather and holidays. Merging the 100+ outlets that share a name and city but not a phone or GST (flagged; a wrong merge moves orders between customers). Writes to the client's database. Logins.
+
+## Next two weeks
+- A real mart (DuckDB or Postgres), nightly load, reconciliation tests.
+- Agree OTIF with Divya and the MT accounts; delete the knob.
+- A delivery-to-invoice key from the carriers, so freight reaches route level.
+- Worst-performer tables as a morning email. Outlet duplicates resolved with the field team.
+
+## What breaks first in production
+- Clean layer is temp views over 511k rows; at 100x the overview takes minutes. The mart is not optional.
+- The API walk is single-threaded; at 100x it needs an incremental pull keyed on invoice date.
+- Matching is six brand rules; a seventh brand or a new title format drops matches silently.
+- The scraper trusts the "page 1 of N" breadcrumb; lose it and we crawl one page per city.
+- A slow generated query ties up the app thread; needs a timeout and its own connection.
