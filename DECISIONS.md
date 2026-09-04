@@ -18,6 +18,7 @@ A running log, kept as the work went. Newest at the bottom.
 
 ## External sources
 - **Freight = billed amount from the partner API.** Driver-entered `fuel_cost_inr` is not shown. One quarter by default, cached, resumable.
+- **Freight joins on warehouse + month, not route.** 87% of invoices name a route from another warehouse; a third of spend landed on route-level cells with deliveries. No route-level freight.
 - **Listing cards only.** They carry price, MRP, stock, last-seen. Detail pages are 19 more minutes at the 1s crawl-delay for a chart nobody asked for. `/internal/` is disallowed; the client refuses to fetch it.
 - **Price gap = today's MRP vs lowest price seen in 14 days, per city.** Shelf price is a floor question.
 - **SKU matching is rules:** brand alias + type words + pack size. Unit slips (400kg vs 400g) accepted at lower confidence; the product master has the same slips.

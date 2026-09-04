@@ -64,7 +64,7 @@ v_price_windows  -- product_id, sku_code, effective_from, effective_to, mrp_inr,
 
 cache.freight_invoices -- carrier bills (the only true freight cost). invoice_id, carrier_name, warehouse_code,
   route_code, service_date, service_month, amount_inr, distance_km, weight_kg, temperature_controlled, status.
-  Join to v_order_service on warehouse_code + route_code + month (no delivery id exists).
+  Join to v_order_service on warehouse_code + month only (no delivery id; route_code on invoices is unreliable).
 cache.competitor_prices -- scraped shelf prices. listing_id, city (Mumbai/Delhi/Bengaluru/Chennai), retailer,
   title, category, price_inr, mrp_inr (retailer's), last_seen, product_id (matched Kestrel SKU or NULL),
   match_confidence
@@ -202,16 +202,16 @@ PREPARED = [
     ("freight cost per delivered case by warehouse, last quarter",
      ["freight", "warehouse"],
      """WITH cases AS (
-            SELECT warehouse_code, route_code, order_month AS month, SUM(delivered_cases) AS cases
+            SELECT warehouse_code, order_month AS month, SUM(delivered_cases) AS cases
             FROM v_order_service WHERE outlet_reportable = 1
-              AND order_date BETWEEN '{last_quarter_start}' AND '{last_quarter_end}' GROUP BY 1,2,3),
+              AND order_date BETWEEN '{last_quarter_start}' AND '{last_quarter_end}' GROUP BY 1,2),
         freight AS (
-            SELECT warehouse_code, route_code, service_month AS month, SUM(amount_inr) AS freight_inr
+            SELECT warehouse_code, service_month AS month, SUM(amount_inr) AS freight_inr
             FROM cache.freight_invoices
-            WHERE service_date BETWEEN '{last_quarter_start}' AND '{last_quarter_end}' GROUP BY 1,2,3)
+            WHERE service_date BETWEEN '{last_quarter_start}' AND '{last_quarter_end}' GROUP BY 1,2)
         SELECT c.warehouse_code, ROUND(SUM(f.freight_inr)) AS freight_inr, ROUND(SUM(c.cases)) AS cases,
                ROUND(SUM(f.freight_inr)/SUM(c.cases), 2) AS freight_per_case
-        FROM cases c JOIN freight f USING (warehouse_code, route_code, month)
+        FROM cases c JOIN freight f USING (warehouse_code, month)
         GROUP BY 1 ORDER BY freight_per_case DESC"""),
     ("outlets that ordered a discontinued SKU after its discontinuation date",
      ["discontinu"],

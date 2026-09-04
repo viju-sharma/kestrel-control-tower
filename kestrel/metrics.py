@@ -217,29 +217,39 @@ def freight_coverage(conn):
 
 
 def freight_per_case(conn, dim, start, end, region_id=None):
-    """Freight cost per delivered case. Invoices carry warehouse, route and a
-    service date but no delivery id, so we join on warehouse + route + month."""
-    w, p = _window(start, end, region_id)
+    """Freight cost per delivered case.
+
+    Invoices carry a warehouse code, a route code and a service date but no
+    delivery id. The route code cannot be trusted: on 87% of invoices it names
+    a route that belongs to a different warehouse, and only a third of the
+    spend lands on a warehouse+route+month cell that has deliveries. So we
+    join on warehouse + month, which keeps every rupee, and do not offer a
+    route-level cut. Carrier figures share each cell's cases in proportion
+    to what each carrier billed in it."""
+    # region here is the warehouse's region, not the ordering outlet's, so a
+    # warehouse-month cell is counted once
+    w, p = _window(start, end, region_id, date_col="s.order_date", region_col="wh.region_id")
     cases = query(conn, f"""
-        SELECT warehouse_code, route_code, order_month AS month, region_name,
-               SUM(delivered_cases) AS cases
-        FROM v_order_service WHERE outlet_reportable = 1 AND {w}
-        GROUP BY 1, 2, 3, 4""", p)
+        SELECT s.warehouse_code, s.order_month AS month, rg.region_name, SUM(s.delivered_cases) AS cases
+        FROM v_order_service s
+        JOIN warehouses wh ON wh.warehouse_code = s.warehouse_code
+        JOIN regions rg ON rg.region_id = wh.region_id
+        WHERE s.outlet_reportable = 1 AND {w}
+        GROUP BY 1, 2, 3""", p)
     inv = query(conn, """
-        SELECT warehouse_code, route_code, service_month AS month, carrier_name,
+        SELECT warehouse_code, service_month AS month, carrier_name,
                SUM(amount_inr) AS freight_inr, COUNT(*) AS invoices
         FROM cache.freight_invoices WHERE service_date BETWEEN ? AND ?
-        GROUP BY 1, 2, 3, 4""", [str(start), str(end)])
+        GROUP BY 1, 2, 3""", [str(start), str(end)])
     if inv.empty or cases.empty:
         return pd.DataFrame()
-    cell = inv.groupby(["warehouse_code", "route_code", "month"], as_index=False)["freight_inr"].sum() \
+    cell = inv.groupby(["warehouse_code", "month"], as_index=False)["freight_inr"].sum() \
               .rename(columns={"freight_inr": "cell_freight"})
-    m = inv.merge(cell, on=["warehouse_code", "route_code", "month"]) \
-           .merge(cases, on=["warehouse_code", "route_code", "month"], how="inner")
-    # share each cell's delivered cases across carriers in proportion to what they billed
+    m = inv.merge(cell, on=["warehouse_code", "month"]) \
+           .merge(cases, on=["warehouse_code", "month"], how="inner")
     m["cases_alloc"] = m["cases"] * m["freight_inr"] / m["cell_freight"]
     key = {"warehouse": "warehouse_code", "carrier": "carrier_name", "month": "month",
-           "route": "route_code", "region": "region_name"}[dim]
+           "region": "region_name"}[dim]
     g = m.groupby(key, as_index=False).agg(freight_inr=("freight_inr", "sum"),
                                            cases=("cases_alloc", "sum"),
                                            invoices=("invoices", "sum"))

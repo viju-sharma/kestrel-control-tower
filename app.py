@@ -190,8 +190,8 @@ with tab_money:
                 "The driver-entered fuel_cost_inr in deliveries is not the billed amount, so we do not show it.")
     else:
         st.caption("Invoices synced for: " + ", ".join(cov["service_month"]) +
-                   ". Joined to deliveries on warehouse + route + month (invoices carry no delivery id).")
-        dim = st.radio("Freight by", ["warehouse", "carrier", "region", "month", "route"], horizontal=True, key="fr_dim")
+                   ". Joined to deliveries on warehouse + month: invoices carry no delivery id and their route codes are unreliable (see Data notes).")
+        dim = st.radio("Freight by", ["warehouse", "carrier", "region", "month"], horizontal=True, key="fr_dim")
         fr = m.freight_per_case(conn, dim, start, end, region_id)
         if fr.empty:
             st.warning("No invoices in this window. Sync it first.")
