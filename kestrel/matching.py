@@ -33,7 +33,9 @@ def clean_title(title):
     t = title.lower()
     for pat in NOISE:
         t = re.sub(pat, " ", t)
-    t = t.replace("sel.", "select")
+    # retailer abbreviations seen in the titles
+    for short, full in (("sel.", "select"), ("inst.", "instant"), ("frzn", "frozen")):
+        t = t.replace(short, full)
     return re.sub(r"\s+", " ", t).strip()
 
 

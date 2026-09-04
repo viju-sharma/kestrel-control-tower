@@ -57,6 +57,8 @@ def test_title_cleaning_and_pack():
     assert clean_title("Combo Kestrel Sel. Ketchup 100g | Best Before 6M") == "kestrel select ketchup 100g"
     assert parse_pack("Pack of 1 Bluepeak Frozen Peas 150kg") == (150.0, "KG")
     assert parse_pack("no size here") == (None, None)
+    assert clean_title("Kestrel Frzn Paratha 150ml") == "kestrel frozen paratha 150ml"
+    assert clean_title("Bluepeak Inst. Noodles 1000ml") == "bluepeak instant noodles 1000ml"
 
 
 PRODUCTS = [

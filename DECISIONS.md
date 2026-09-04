@@ -22,3 +22,8 @@ A running log, kept as the work went. Newest at the bottom.
 - **Price gap = today's MRP vs lowest price seen in 14 days, per city.** Shelf price is a floor question.
 - **SKU matching is rules:** brand alias + type words + pack size. Unit slips (400kg vs 400g) accepted at lower confidence; the product master has the same slips.
 - **Weather and holidays: not used.** No metric they would explain in the time.
+
+## The screen
+- Overview leads with six numbers and the worst outlets, routes, warehouses. No clicks.
+- Region selector is the regional manager's view. Same code, one filter. No logins.
+- Ask-anything: an LLM writes one read-only SELECT over the clean layer. SQL and rows shown with every answer. Without a key the tab offers the eight sample questions so it still opens.
