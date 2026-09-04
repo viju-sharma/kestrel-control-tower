@@ -80,6 +80,9 @@ Conventions:
 - Return ONLY the SQL, no prose, no code fences, no explanation. Keep it short. Round rates to 3 decimals. Add LIMIT 200 unless aggregating to few rows.
 - Do not join v_order_service to v_outlets: v_order_service already carries outlet columns and outlet_reportable.
 - Excursions per hundred chilled deliveries = 100.0*SUM(CASE WHEN has_chilled=1 THEN temperature_excursion_flag END)/SUM(has_chilled).
+- For "why did X change / drop / rise" questions, do not return one number. Return the metric for the period
+  AND the comparable prior period (label them), broken down by the most likely driver: short_reason_code via
+  v_order_lines for fill rate, warehouse_code or route_code for delays, category for returns. A dozen rows is ideal.
 """
 
 FORBIDDEN = re.compile(r"\b(insert|update|delete|drop|alter|create|attach|detach|pragma|replace|vacuum)\b", re.I)
@@ -220,6 +223,7 @@ def narrate(question, sql, df):
         "You explain query results to a supply chain director. Two to four plain sentences, "
         "lead with the answer, quote the actual numbers, mention the biggest item by name. "
         "Do not count rows yourself: the total row count is given and you may only see the first few. "
+        "If the rows cannot explain a 'why', say what they do show and stop; never invent a cause or an item. "
         "No preamble, no bullet points, no markdown, no restating the question.",
         f"Question: {question}\n\nSQL used:\n{sql}\n\nTotal rows: {len(df)} (showing first {shown})\n"
         f"Rows (CSV):\n{sample}", max_tokens=400)
