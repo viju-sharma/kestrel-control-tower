@@ -8,6 +8,8 @@ LLM_API_KEY / LLM_BASE_URL. Without either the app falls back to a small
 library of prepared questions so the feature still opens."""
 import os
 import re
+import threading
+import time
 
 import requests
 
@@ -75,7 +77,8 @@ Conventions:
 - The data ends on {data_end}; "last month" = {last_month}, "last quarter" = {last_quarter_label}
   ({last_quarter_start} to {last_quarter_end}). "Last week" = the 7 days ending {data_end}.
 - Regions: West, South, North, East, Central.{region_hint}
-- Return ONLY the SQL, no prose, no code fences. Round rates to 3 decimals. Add LIMIT 200 unless aggregating to few rows.
+- Return ONLY the SQL, no prose, no code fences, no explanation. Keep it short. Round rates to 3 decimals. Add LIMIT 200 unless aggregating to few rows.
+- Do not join v_order_service to v_outlets: v_order_service already carries outlet columns and outlet_reportable.
 - Excursions per hundred chilled deliveries = 100.0*SUM(CASE WHEN has_chilled=1 THEN temperature_excursion_flag END)/SUM(has_chilled).
 """
 
@@ -92,16 +95,27 @@ def _anthropic():
     return anthropic.Anthropic()
 
 
-def _openai_compatible(system, user, max_tokens):
-    r = requests.post(
-        f"{config.LLM_BASE_URL.rstrip('/')}/chat/completions",
-        headers={"Authorization": f"Bearer {config.LLM_API_KEY}", "Content-Type": "application/json"},
-        json={"model": config.LLM_MODEL, "max_tokens": max_tokens, "temperature": 0,
-              "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]},
-        timeout=60)
-    if r.status_code != 200:
-        raise RuntimeError(f"LLM endpoint returned {r.status_code}: {r.text[:300]}")
-    return r.json()["choices"][0]["message"]["content"]
+def _openai_compatible(system, user, max_tokens, attempts=4):
+    """One chat call. Free tiers rate-limit per minute, so 429 is retried
+    after the wait the server asks for."""
+    for i in range(attempts):
+        r = requests.post(
+            f"{config.LLM_BASE_URL.rstrip('/')}/chat/completions",
+            headers={"Authorization": f"Bearer {config.LLM_API_KEY}", "Content-Type": "application/json"},
+            json={"model": config.LLM_MODEL, "max_tokens": max_tokens, "temperature": 0,
+                  "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]},
+            timeout=90)
+        if r.status_code == 429 and i < attempts - 1:
+            m = re.search(r"try again in ([\d.]+)s", r.text)
+            wait = float(m.group(1)) + 1 if m else float(r.headers.get("Retry-After", 10))
+            time.sleep(min(wait, 60))
+            continue
+        if r.status_code != 200:
+            raise RuntimeError(f"LLM endpoint returned {r.status_code}: {r.text[:300]}")
+        choice = r.json()["choices"][0]
+        if choice.get("finish_reason") == "length":
+            raise RuntimeError("the model ran out of tokens before finishing; ask a narrower question")
+        return choice["message"]["content"]
 
 
 def complete(system, user, max_tokens=800):
@@ -146,21 +160,47 @@ def _context(conn, region_name=None):
     )
 
 
+def extract_sql(text):
+    """Models sometimes wrap the query in prose or a code fence despite being
+    told not to. Take the fenced block if there is one, else everything from
+    the first SELECT/WITH."""
+    m = re.search(r"```(?:sql)?\s*(.*?)```", text, flags=re.S | re.I)
+    body = m.group(1) if m else text
+    m = re.search(r"\b(WITH|SELECT)\b", body, flags=re.I)
+    if not m:
+        raise ValueError("the model did not return a SQL query")
+    return body[m.start():].strip().rstrip(";").strip()
+
+
 def generate_sql(conn, question, region_name=None):
-    text = complete(SCHEMA.format(**_context(conn, region_name)), question)
+    text = complete(SCHEMA.format(**_context(conn, region_name)), question, max_tokens=2500)
     if text is None:
         return None
-    sql = re.sub(r"^```(?:sql)?\s*|\s*```$", "", text.strip(), flags=re.S).strip().rstrip(";")
-    return sql
+    return extract_sql(text)
 
 
-def safe_run(conn, sql, limit=500):
+QUERY_TIMEOUT_S = int(os.environ.get("KESTREL_ASK_TIMEOUT_S", "45"))
+
+
+def safe_run(conn, sql, limit=500, timeout=QUERY_TIMEOUT_S):
+    """Run one read-only query with a wall-clock limit. A generated query can
+    be pathological (correlated subqueries over 500k lines); interrupting it
+    keeps the app responsive and tells the user to rephrase."""
     head = sql.lstrip().lower()
     if not (head.startswith("select") or head.startswith("with")):
         raise ValueError("only SELECT queries are allowed")
     if ";" in sql or FORBIDDEN.search(sql):
         raise ValueError("query contains a statement that is not allowed")
-    df = query(conn, sql)
+    timer = threading.Timer(timeout, conn.interrupt)
+    timer.start()
+    try:
+        df = query(conn, sql)
+    except Exception as e:
+        if "interrupted" in str(e).lower():
+            raise TimeoutError(f"query took longer than {timeout}s and was stopped; try a narrower question")
+        raise
+    finally:
+        timer.cancel()
     return df.head(limit)
 
 

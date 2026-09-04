@@ -53,7 +53,7 @@ ANTHROPIC_MODEL = os.environ.get("KESTREL_LLM_MODEL", "claude-sonnet-5")
 _SHORTCUTS = (
     ("XAI_API_KEY", "https://api.x.ai/v1", "grok-3-mini"),
     ("GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.5-flash"),
-    ("GROQ_API_KEY", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
+    ("GROQ_API_KEY", "https://api.groq.com/openai/v1", "openai/gpt-oss-120b"),
 )
 LLM_API_KEY = os.environ.get("LLM_API_KEY")
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL")

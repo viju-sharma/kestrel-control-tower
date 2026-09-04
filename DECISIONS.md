@@ -29,6 +29,7 @@ A running log, kept as the work went. Newest at the bottom.
 - Region selector is the regional manager's view. Same code, one filter. No logins.
 - Ask-anything: an LLM writes one read-only SELECT over the clean layer. SQL and rows shown with every answer. Without a key the tab offers the eight sample questions so it still opens.
 - Any OpenAI-compatible endpoint works alongside Anthropic. Whoever runs this may not have my key.
+- **Clean layer became indexed temp tables.** A generated outlet query took 45s through view-on-view joins; as tables, 10ms. Five seconds at connect, once.
 
 ## Not built, on purpose
 Route-level freight. Price history. Weather and holidays. Merging the 100+ outlets that share a name and city but not a phone or GST (flagged; a wrong merge moves orders between customers). Writes to the client's database. Logins.
@@ -40,8 +41,8 @@ Route-level freight. Price history. Weather and holidays. Merging the 100+ outle
 - Worst-performer tables as a morning email. Outlet duplicates resolved with the field team.
 
 ## What breaks first in production
-- Clean layer is temp views over 511k rows; at 100x the overview takes minutes. The mart is not optional.
+- Clean layer is rebuilt per connection from 511k rows (5s today); at 100x that is minutes and more RAM than a laptop. The mart is not optional.
 - The API walk is single-threaded; at 100x it needs an incremental pull keyed on invoice date.
 - Matching is six brand rules; a seventh brand or a new title format drops matches silently.
 - The scraper trusts the "page 1 of N" breadcrumb; lose it and we crawl one page per city.
-- A slow generated query ties up the app thread; needs a timeout and its own connection.
+- Generated queries are read-only and killed after 45s but share the app connection. The model's prose is sometimes wrong when the rows are right; the table is the answer.

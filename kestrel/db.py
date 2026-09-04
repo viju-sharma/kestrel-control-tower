@@ -1,9 +1,12 @@
 """Database access.
 
 The operational db is opened read-only. A second file (cache.db) holds what
-we fetch ourselves and is attached as `cache`. The clean views are TEMP, so
-they exist only for the life of the connection."""
+we fetch ourselves and is attached as `cache`. The clean layer is defined as
+TEMP views (sql/views.sql) and then copied into indexed TEMP tables, so it
+exists only for the life of the connection and every query after that is a
+plain table scan or index lookup rather than a view-on-view join."""
 import sqlite3
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -57,7 +60,40 @@ def connect():
            .replace("{on_time_min}", str(config.ON_TIME_TOLERANCE_MIN))
            .replace("{in_full_pct}", str(config.IN_FULL_PCT)))
     conn.executescript(sql)
+    _materialise(conn)
     return conn
+
+
+# view -> columns worth an index. Order matters: later tables read earlier ones.
+MATERIALISE = [
+    ("v_outlets",       ["outlet_id", "outlet_code", "region_id"]),
+    ("v_order_lines",   ["order_id", "product_id"]),
+    ("v_orders",        ["order_id", "outlet_id", "order_date", "region_id"]),
+    ("v_deliveries",    ["order_id", "route_id"]),
+    ("v_order_service", ["order_id", "order_date", "outlet_code", "route_code", "warehouse_code", "region_id"]),
+    ("v_returns",       ["return_date", "order_id", "product_id"]),
+    ("v_inventory",     ["snapshot_date", "warehouse_id", "product_id"]),
+    ("v_price_windows", ["product_id"]),
+]
+
+
+def _materialise(conn, log=None):
+    """Replace each temp view with a temp table of the same name plus indexes.
+    Takes a few seconds once per connection; the app caches the connection."""
+    t0 = time.time()
+    # copy everything first (later views read earlier ones), then swap names;
+    # SQLite refuses a rename while a view still depends on the old name
+    for name, _ in MATERIALISE:
+        conn.execute(f"CREATE TEMP TABLE {name}__t AS SELECT * FROM {name}")
+    for name, _ in reversed(MATERIALISE):
+        conn.execute(f"DROP VIEW {name}")
+    for name, cols in MATERIALISE:
+        conn.execute(f"ALTER TABLE {name}__t RENAME TO {name}")
+        for c in cols:
+            conn.execute(f"CREATE INDEX temp.ix_{name}_{c} ON {name}({c})")
+    conn.commit()
+    if log:
+        log(f"clean layer built in {time.time() - t0:.1f}s")
 
 
 def query(conn, sql, params=()):
