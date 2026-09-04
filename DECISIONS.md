@@ -15,3 +15,10 @@ A running log, kept as the work went. Newest at the bottom.
 - **Orders that count:** DELIVERED and PARTIAL. Cancelled were never served; OPEN are not finished.
 - **Outlets that count:** active, not soft-deleted, not test. Three test outlets carry 260 orders.
 - **Value from lines, never headers.** Gross ties; the partner feed's net is inflated by exactly 8.5%. The open ticket blames the wrong column.
+
+## External sources
+- **Freight = billed amount from the partner API.** Driver-entered `fuel_cost_inr` is not shown. One quarter by default, cached, resumable.
+- **Listing cards only.** They carry price, MRP, stock, last-seen. Detail pages are 19 more minutes at the 1s crawl-delay for a chart nobody asked for. `/internal/` is disallowed; the client refuses to fetch it.
+- **Price gap = today's MRP vs lowest price seen in 14 days, per city.** Shelf price is a floor question.
+- **SKU matching is rules:** brand alias + type words + pack size. Unit slips (400kg vs 400g) accepted at lower confidence; the product master has the same slips.
+- **Weather and holidays: not used.** No metric they would explain in the time.

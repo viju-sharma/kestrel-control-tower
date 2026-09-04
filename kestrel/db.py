@@ -53,7 +53,9 @@ def connect():
     conn = sqlite3.connect(f"file:{config.DB_PATH}?mode=ro", uri=True, check_same_thread=False)
     conn.create_function("parse_ts", 1, parse_ts, deterministic=True)
     conn.execute("ATTACH DATABASE ? AS cache", (str(config.CACHE_PATH),))
-    sql = VIEWS_SQL.read_text().replace("{on_time_min}", str(config.ON_TIME_TOLERANCE_MIN))
+    sql = (VIEWS_SQL.read_text()
+           .replace("{on_time_min}", str(config.ON_TIME_TOLERANCE_MIN))
+           .replace("{in_full_pct}", str(config.IN_FULL_PCT)))
     conn.executescript(sql)
     return conn
 

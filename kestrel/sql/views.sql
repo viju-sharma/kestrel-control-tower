@@ -1,5 +1,5 @@
 -- Clean layer. Every view is TEMP so the client's database is never modified.
--- {on_time_min} is substituted at connect time from config.
+-- {on_time_min} and {in_full_pct} are substituted at connect time from config.
 
 -- Outlets: flag test rows and normalise city spellings. `reportable` is what
 -- every ranking uses: active, not soft-deleted, not a test/migration record.
@@ -80,6 +80,7 @@ LEFT JOIN routes rt    ON rt.route_id = d.route_id
 LEFT JOIN warehouses w ON w.warehouse_id = d.warehouse_id;
 
 -- One row per order that reached fulfilment: the grain for fill rate and OTIF.
+-- in_full uses a tolerance because no order in this data is exactly complete.
 -- Cancelled and still-open orders are excluded; they have not been served yet.
 CREATE TEMP VIEW v_order_service AS
 SELECT
@@ -89,10 +90,10 @@ SELECT
     o.channel, o.source_system, o.order_status, o.outlet_reportable,
     l.ordered_cases, l.delivered_cases, l.ordered_eaches, l.delivered_eaches,
     l.order_value_inr, l.delivered_value_inr, l.short_lines, l.line_count,
-    CASE WHEN l.short_lines = 0 THEN 1 ELSE 0 END AS in_full,
+    CASE WHEN l.delivered_cases >= l.ordered_cases * {in_full_pct} / 100.0 THEN 1 ELSE 0 END AS in_full,
     d.delivery_id, d.delay_minutes, d.on_time, d.late_2h,
     d.temperature_excursion_flag, d.max_temp_celsius, d.returned_cases, d.pod_captured,
-    CASE WHEN l.short_lines = 0 AND d.on_time = 1 THEN 1 ELSE 0 END AS otif,
+    CASE WHEN l.delivered_cases >= l.ordered_cases * {in_full_pct} / 100.0 AND d.on_time = 1 THEN 1 ELSE 0 END AS otif,
     l.has_chilled
 FROM v_orders o
 JOIN (

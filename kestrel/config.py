@@ -27,3 +27,9 @@ FY_START_MONTH = 4
 PRICE_FRESHNESS_DAYS = int(os.environ.get("KESTREL_PRICE_FRESHNESS_DAYS", "14"))
 
 ANTHROPIC_MODEL = os.environ.get("KESTREL_LLM_MODEL", "claude-sonnet-5")
+
+# "In full" is normally exact. In this dataset every single order line is
+# short by a little (see docs/DATA_NOTES.md), so exact in-full is zero everywhere
+# and OTIF would be meaningless. We treat an order as in full when its case
+# fill rate is at or above this percentage, and say so on screen.
+IN_FULL_PCT = float(os.environ.get("KESTREL_IN_FULL_PCT", "90"))
