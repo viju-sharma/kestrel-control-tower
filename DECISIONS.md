@@ -28,6 +28,7 @@ A running log, kept as the work went. Newest at the bottom.
 - Overview leads with six numbers and the worst outlets, routes, warehouses. No clicks.
 - Region selector is the regional manager's view. Same code, one filter. No logins.
 - Ask-anything: an LLM writes one read-only SELECT over the clean layer. SQL and rows shown with every answer. Without a key the tab offers the eight sample questions so it still opens.
+- Any OpenAI-compatible endpoint works alongside Anthropic. Whoever runs this may not have my key.
 
 ## Not built, on purpose
 Route-level freight. Price history. Weather and holidays. Merging the 100+ outlets that share a name and city but not a phone or GST (flagged; a wrong merge moves orders between customers). Writes to the client's database. Logins.

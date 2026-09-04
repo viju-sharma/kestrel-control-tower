@@ -226,7 +226,7 @@ with tab_price:
 
 with tab_ask:
     st.subheader("Ask")
-    mode = "Claude writes the SQL" if ask.llm_available() else "No ANTHROPIC_API_KEY: prepared questions only"
+    mode = f"{ask.llm_name()} writes the SQL" if ask.llm_available() else "No LLM key set: prepared questions only"
     st.caption(f"{mode}. Every answer shows the SQL and the rows it came from. "
                + (f"Scoped to {region_name}." if region_name else ""))
     qs = ask.prepared_questions()

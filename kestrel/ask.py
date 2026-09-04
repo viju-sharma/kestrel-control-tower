@@ -1,14 +1,15 @@
 """Plain-English questions over the clean views.
 
-With an ANTHROPIC_API_KEY the question goes to Claude, which writes one
-read-only SQLite query against the views described below. We run it, show
-the SQL and the rows, then ask the model for a two-sentence reading of the
-numbers. Without a key the app falls back to a small library of prepared
-questions so the feature still opens."""
+An LLM writes one read-only SQLite query against the views described below.
+We run it, show the SQL and the rows, then ask the model for a two-sentence
+reading of the numbers. Anthropic is used if ANTHROPIC_API_KEY is set;
+otherwise any OpenAI-compatible endpoint (Gemini, Groq, Ollama...) via
+LLM_API_KEY / LLM_BASE_URL. Without either the app falls back to a small
+library of prepared questions so the feature still opens."""
 import os
 import re
 
-import pandas as pd
+import requests
 
 from . import config
 from .db import query
@@ -81,7 +82,7 @@ Conventions:
 FORBIDDEN = re.compile(r"\b(insert|update|delete|drop|alter|create|attach|detach|pragma|replace|vacuum)\b", re.I)
 
 
-def _client():
+def _anthropic():
     if not os.environ.get("ANTHROPIC_API_KEY"):
         return None
     try:
@@ -91,8 +92,40 @@ def _client():
     return anthropic.Anthropic()
 
 
+def _openai_compatible(system, user, max_tokens):
+    r = requests.post(
+        f"{config.LLM_BASE_URL.rstrip('/')}/chat/completions",
+        headers={"Authorization": f"Bearer {config.LLM_API_KEY}", "Content-Type": "application/json"},
+        json={"model": config.LLM_MODEL, "max_tokens": max_tokens, "temperature": 0,
+              "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]},
+        timeout=60)
+    if r.status_code != 200:
+        raise RuntimeError(f"LLM endpoint returned {r.status_code}: {r.text[:300]}")
+    return r.json()["choices"][0]["message"]["content"]
+
+
+def complete(system, user, max_tokens=800):
+    """One chat turn, whichever provider is configured."""
+    client = _anthropic()
+    if client is not None:
+        msg = client.messages.create(model=config.ANTHROPIC_MODEL, max_tokens=max_tokens, system=system,
+                                     messages=[{"role": "user", "content": user}])
+        return msg.content[0].text
+    if config.LLM_API_KEY and config.LLM_BASE_URL and config.LLM_MODEL:
+        return _openai_compatible(system, user, max_tokens)
+    return None
+
+
 def llm_available():
-    return _client() is not None
+    return _anthropic() is not None or bool(config.LLM_API_KEY and config.LLM_BASE_URL and config.LLM_MODEL)
+
+
+def llm_name():
+    if _anthropic() is not None:
+        return f"Anthropic {config.ANTHROPIC_MODEL}"
+    if llm_available():
+        return config.LLM_MODEL
+    return None
 
 
 def _context(conn, region_name=None):
@@ -114,15 +147,10 @@ def _context(conn, region_name=None):
 
 
 def generate_sql(conn, question, region_name=None):
-    client = _client()
-    if client is None:
+    text = complete(SCHEMA.format(**_context(conn, region_name)), question)
+    if text is None:
         return None
-    system = SCHEMA.format(**_context(conn, region_name))
-    msg = client.messages.create(
-        model=config.ANTHROPIC_MODEL, max_tokens=800, system=system,
-        messages=[{"role": "user", "content": question}])
-    sql = msg.content[0].text.strip()
-    sql = re.sub(r"^```(?:sql)?\s*|\s*```$", "", sql, flags=re.S).strip().rstrip(";")
+    sql = re.sub(r"^```(?:sql)?\s*|\s*```$", "", text.strip(), flags=re.S).strip().rstrip(";")
     return sql
 
 
@@ -137,18 +165,15 @@ def safe_run(conn, sql, limit=500):
 
 
 def narrate(question, sql, df):
-    client = _client()
-    if client is None or df.empty:
+    if df.empty:
         return None
     sample = df.head(40).to_csv(index=False)
-    msg = client.messages.create(
-        model=config.ANTHROPIC_MODEL, max_tokens=400,
-        system=("You explain query results to a supply chain director. Two to four plain sentences, "
-                "lead with the answer, quote the actual numbers, mention the biggest item by name. "
-                "No preamble, no bullet points, no restating the question."),
-        messages=[{"role": "user", "content":
-                   f"Question: {question}\n\nSQL used:\n{sql}\n\nResult rows (CSV):\n{sample}"}])
-    return msg.content[0].text.strip()
+    text = complete(
+        "You explain query results to a supply chain director. Two to four plain sentences, "
+        "lead with the answer, quote the actual numbers, mention the biggest item by name. "
+        "No preamble, no bullet points, no restating the question.",
+        f"Question: {question}\n\nSQL used:\n{sql}\n\nResult rows (CSV):\n{sample}", max_tokens=400)
+    return text.strip() if text else None
 
 
 # --------------------------------------------------------------- fallback

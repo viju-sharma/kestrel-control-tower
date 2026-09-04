@@ -53,9 +53,19 @@ Both scripts write to `data/cache.db`, are safe to re-run, and resume if
 interrupted. Delete `data/cache.db` to start over. The app picks the data up
 on the next page load.
 
-**Ask tab.** With `ANTHROPIC_API_KEY` set in the environment, Claude writes
-the SQL. Without it the tab offers eight prepared questions. Set
-`KESTREL_LLM_MODEL` to change the model.
+**Ask tab.** Needs an LLM. Any one of these works; without one the tab
+offers eight prepared questions.
+
+```bash
+export ANTHROPIC_API_KEY=...                 # Claude (model via KESTREL_LLM_MODEL)
+export GEMINI_API_KEY=...                    # Gemini, free tier at aistudio.google.com/apikey
+# or any OpenAI-compatible endpoint, e.g. Groq (free tier) or a local Ollama:
+export LLM_API_KEY=... LLM_BASE_URL=https://api.groq.com/openai/v1 LLM_MODEL=llama-3.3-70b-versatile
+export LLM_API_KEY=ollama LLM_BASE_URL=http://localhost:11434/v1 LLM_MODEL=llama3.1
+```
+
+The model only ever writes a single SELECT; it is checked for anything
+else before it runs, and the SQL is shown with every answer.
 
 ## Knobs
 
@@ -71,6 +81,7 @@ All optional, all environment variables.
 | `KESTREL_PARTNER_API` | `http://localhost:8088` | Partner API base URL |
 | `KESTREL_PARTNER_API_KEY` | the key from the pack | Sent as `X-API-Key` |
 | `KESTREL_BAZAAR_URL` | `http://localhost:8080` | Competitor site base URL |
+| `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `LLM_API_KEY`+`LLM_BASE_URL`+`LLM_MODEL` | none | Enables free-form questions in the Ask tab |
 
 ## Tests
 
