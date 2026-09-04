@@ -102,8 +102,7 @@ def _openai_compatible(system, user, max_tokens, attempts=4):
         r = requests.post(
             f"{config.LLM_BASE_URL.rstrip('/')}/chat/completions",
             headers={"Authorization": f"Bearer {config.LLM_API_KEY}", "Content-Type": "application/json"},
-            json={"model": config.LLM_MODEL, "max_tokens": max_tokens, "temperature": 0,
-                  "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]},
+            json=_payload(system, user, max_tokens),
             timeout=90)
         if r.status_code == 429 and i < attempts - 1:
             m = re.search(r"try again in ([\d.]+)s", r.text)
@@ -112,10 +111,18 @@ def _openai_compatible(system, user, max_tokens, attempts=4):
             continue
         if r.status_code != 200:
             raise RuntimeError(f"LLM endpoint returned {r.status_code}: {r.text[:300]}")
-        choice = r.json()["choices"][0]
-        if choice.get("finish_reason") == "length":
-            raise RuntimeError("the model ran out of tokens before finishing; ask a narrower question")
-        return choice["message"]["content"]
+        # finish_reason can say "length" on reasoning models even when the
+        # visible answer is complete, so we do not fail on it; a truncated
+        # query fails loudly at execution instead.
+        return r.json()["choices"][0]["message"]["content"] or ""
+
+
+def _payload(system, user, max_tokens):
+    body = {"model": config.LLM_MODEL, "max_tokens": max_tokens, "temperature": 0,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+    if "gpt-oss" in (config.LLM_MODEL or ""):
+        body["reasoning_effort"] = "low"     # SQL does not need a long think; saves free-tier tokens
+    return body
 
 
 def complete(system, user, max_tokens=800):
@@ -208,11 +215,14 @@ def narrate(question, sql, df):
     if df.empty:
         return None
     sample = df.head(40).to_csv(index=False)
+    shown = min(40, len(df))
     text = complete(
         "You explain query results to a supply chain director. Two to four plain sentences, "
         "lead with the answer, quote the actual numbers, mention the biggest item by name. "
-        "No preamble, no bullet points, no restating the question.",
-        f"Question: {question}\n\nSQL used:\n{sql}\n\nResult rows (CSV):\n{sample}", max_tokens=400)
+        "Do not count rows yourself: the total row count is given and you may only see the first few. "
+        "No preamble, no bullet points, no markdown, no restating the question.",
+        f"Question: {question}\n\nSQL used:\n{sql}\n\nTotal rows: {len(df)} (showing first {shown})\n"
+        f"Rows (CSV):\n{sample}", max_tokens=400)
     return text.strip() if text else None
 
 

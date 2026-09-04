@@ -163,7 +163,7 @@ question is about today's shelf.
 
 | Decision | Chosen | Alternative | Why |
 |---|---|---|---|
-| Clean layer | TEMP views created on connect, source db read-only | Materialised tables, dbt-style transforms | Zero setup, nothing to keep in sync, the client's file is never touched. Costs query time at 100x volume (see DECISIONS.md). |
+| Clean layer | TEMP views, copied into indexed TEMP tables on connect (~5s) | Views only; or a persistent mart with a build step | Views alone made a generated outlet-level query take 45s; tables make it 10ms. Still zero setup and the client's file is never touched. Costs start-up time and RAM at 100x volume (see DECISIONS.md). |
 | UI | Streamlit, one file | FastAPI + React | Opens with one command, which was the client's only hard constraint. A real front end is two weeks we do not have. |
 | Front page period | Last complete fiscal quarter (Apr–Jun 2026) | Calendar quarter, last 30 days | The board asks about Q1 first and Kestrel's Q1 is April–June. |
 | Fill rate unit | Both computed, cases default, toggle | Pick one | The two memos disagree for good reasons. The toggle is cheaper than the argument. |
@@ -173,6 +173,7 @@ question is about today's shelf.
 | Freight scope | One quarter by default, cached, resumable | Full walk on every start | Full walk is minutes of flaky API per launch; the front page only needs the quarter. |
 | Price gap | MRP vs lowest price seen in last 14 days, per city | Median, per-retailer | "What are competitors actually charging on the shelf" is a floor question. Freshness window is an env var. |
 | Scrape depth | Listing cards only | Detail pages with history | Cards have everything the brief asks for; 1,134 extra requests at 1s crawl delay is 19 minutes for a chart nobody requested. |
-| Ask-anything | Claude writes SQL against the views, SQL and rows shown | Templated questions only, or free SQL with no guard | Divya's questions change daily. Showing the SQL is what makes the answer defensible. Falls back to prepared questions without a key so the tab still opens. |
+| Ask-anything | An LLM writes SQL against the clean layer, SQL and rows shown, 45s query timeout | Templated questions only, or free SQL with no guard | Divya's questions change daily. Showing the SQL is what makes the answer defensible. Falls back to prepared questions without a key so the tab still opens. |
+| LLM provider | Anthropic SDK or any OpenAI-compatible endpoint | Anthropic only | The assessors may not have the same key we do. Verified on Groq's free tier (gpt-oss-120b): all eight sample questions answer in 2–4s each. Reasoning models report `finish_reason=length` even when the SQL is complete, so we execute what came back rather than trusting that flag. |
 | Weather / holidays | Not used | Open-Meteo, Nager.Date | We could not find a metric they would explain in six hours. "It was available" is not a reason. |
 | Duplicate outlets | Flag, do not merge | Fuzzy merge | A wrong merge silently moves orders between customers. |
