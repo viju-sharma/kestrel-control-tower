@@ -1,0 +1,6 @@
+streamlit>=1.40
+pandas>=2.2
+requests>=2.32
+beautifulsoup4>=4.12
+anthropic>=0.40
+pytest>=8
